@@ -1,0 +1,6 @@
+State
+"[np.float64(0.004584200424389423), np.float64(0.6013881136259891), np.float64(0.19514345491770418), np.float64(1.0), np.float64(0.0), np.float64(0.75), np.float64(0.02), np.float64(0.9999999999997895), np.float64(6.424273127367036e-07), np.float64(-8.829084922154292e-08), np.float64(-3.9502638891350423e-16), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.004584200424389423), np.float64(0.6013881136259891), np.float64(0.19514345491770418), np.float64(1.0), np.float64(0.0), np.float64(0.75), np.float64(0.02), np.float64(0.9999999999997895), np.float64(6.424273127367036e-07), np.float64(-8.829084922154292e-08), np.float64(-3.9502638891350423e-16), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0), np.float64(0.0006579645346262764), np.float64(0.5331502573127972), np.float64(0.23288877815631623)]"
+Action
+"[np.float32(-0.11460501), np.float32(3.7152972), np.float32(-0.12858637), np.float32(0.0)]"
+Cost
+0.0
