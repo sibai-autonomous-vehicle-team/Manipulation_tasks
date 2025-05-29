@@ -72,6 +72,7 @@ def run_policy(env_name = 'pick-place-wall-v2', num_episodes = 1, max_steps = 50
 
     policy = SawyerPickPlaceWallV2Policy()
 
+
     wall_params = {
         'position': np.array([0.1, 0.75, 0.06]),
         'half_size': np.array([0.12, 0.01, 0.06]),
@@ -87,7 +88,15 @@ def run_policy(env_name = 'pick-place-wall-v2', num_episodes = 1, max_steps = 50
         episode_cost = 0
         
         for step in range(max_steps):
+
             action = policy.get_action(observation)
+            # If using metaworld built in policy then will inject noise into action so we can produce unsafe states
+            if policy == SawyerPickPlaceWallV2Policy():
+                noise_std = 0.05
+                noise = np.random.normal(0, noise_std, size = action.shape)
+                action = np.clip(action + noise, -1.0, 1.0)
+            else :
+                action = action
             cost = calculate_cost(observation, wall_params)
 
             img_path, csv_path = record_step(env, observation, action, cost, total_steps, images_dir, info_dir, image_size)

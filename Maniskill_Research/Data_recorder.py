@@ -6,11 +6,12 @@ from PIL import Image
 import csv
 import numpy as np
 import torch
+import argparse
 
-def get_data():
+def get_data(name, max_steps, obs_mode):
     all_data =[]
     #Initiate the environment
-    env = gym.make("UnitreeG1PlaceAppleInBowl-v1", obs_mode = "rgb+depth")
+    env = gym.make(name, obs_mode = obs_mode)
     #adjust the obs value returned so that it contains the rendering and state in one variable
     env = FlattenRGBDObservationWrapper(env)
     obs, _  = env.reset()
@@ -23,8 +24,9 @@ def get_data():
         'cost': 0
     }
     all_data.append(obs_data)
-    #Run simulation
-    for step in range(100):
+ 
+    
+    for step in range(max_steps):
         #Sample a random action. Change for actual policy
         action = env.action_space.sample()
         obs, _, terminated, truncated, _ = env.step(action)
@@ -100,7 +102,13 @@ def calculate_cost(env, collision_threshold = 1e-6):
     return 0.0
 
 def main():
-    data = get_data()
+    parser = argparse.ArgumentParser(description= ' Record Maniskill')
+    parser.add_argument('--name', type= str, default= "UnitreeG1PlaceAppleInBowl-v1", help = 'Name of environment')
+    parser.add_argument('--max-steps', type = int, default = 100, help = 'Number of steps')
+    parser.add_argument('--obs-mode',type = str, default = "rgb+depth", help = 'Observation mode')
+
+    args = parser.parse_args()
+    data = get_data(args.name, args.max_steps, args.obs_mode )
     save_data(data)
 
 if __name__ == "__main__":

@@ -31,3 +31,6 @@ maniskill_recordings/
 
 
 test.py was used for determining the object names within the environment and if the objects exist
+
+Env_file.py is the environment file for the set environment that I tested with. Added a cost function and removed render function because rgb_array is returned within obs when running _env.step(action)
+

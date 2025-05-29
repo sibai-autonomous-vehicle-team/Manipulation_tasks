@@ -27,9 +27,9 @@ def find_collision(info_dir):
 
 
 info_dir = "/Users/maxwellastafyev/Desktop/Research_project/metaworld_recordings/info"
-gc = find_collision(info_dir)
-
-print(f"Found {len(gc)} steps with collisions")
-print(gc)
+ground_collisions, wall_collisions = find_collision(info_dir)
+total_collisions = len(ground_collisions) + len(wall_collisions)
+print(f"Found {total_collisions} steps with collisions")
+print(f"Ground: {ground_collisions}, Wall: {wall_collisions}")
 
 
