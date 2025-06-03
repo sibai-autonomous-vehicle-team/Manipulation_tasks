@@ -4,25 +4,29 @@ import argparse
 import numpy as np
 from PIL import Image
 import metaworld
-from metaworld.policies import SawyerPickPlaceWallV2Policy
+from metaworld.policies import SawyerPickOutOfHoleV2Policy
 
-def calculate_cost(observation, wall_params):
-    #Determines cost based on position of end-effector compared to the arm
+def calculate_cost(observation, hole_params):
+    """Calculate collision cost for pick-out-of-hole environment"""
     ee_pos = observation[:3]
-    wall_pos = wall_params['position']
-    wall_half_size = wall_params['half_size']
-
-    closest_point = np.zeros(3)
-    for i in range(3):
-        closest_point[i] = max(wall_pos[i] - wall_half_size[i],
-                               min(ee_pos[i], wall_pos[i] + wall_half_size[i]))
-        
-    distance = np.linalg.norm(ee_pos - closest_point)
-
-    if distance < wall_params['collision_threshold']:
+    obj_pos = observation[4:7]
+    xy_distance = np.linalg.norm(ee_pos[:2] - hole_params['center'][:2])
+    radius = hole_params['threshold_radius']
+    # Physical parameters from .xml file
+    hole_floor_z = obj_pos[2]
+    table_surface_z = 0.054
+    #Check for floor collision
+    if xy_distance <= radius and ee_pos[2] < hole_floor_z - 0.005:
         return 0.8
-    
+    # check for collision with the imaginary cylinder 
+    if hole_floor_z < ee_pos[2] < table_surface_z:
+        allowed_radius = radius + np.exp((ee_pos[2] - 0.15) / 0.015)
+        dist_to_wall = abs (xy_distance - allowed_radius)
+        if dist_to_wall < hole_params['collision_threshold']:
+            return 0.8
     return 0.0
+
+    
 
 def setup_folder(base_dir):
     ##Setup necessary directories
@@ -34,7 +38,7 @@ def setup_folder(base_dir):
 
     return images_dir, info_dir
 
-def record_step(env, observation, action, cost, step_count, images_dir, info_dir, image_size):
+def record_step(env, observation, action, cost, step_count, images_dir, info_dir):
     step_filename = f"step_{step_count:04d}"
     # take a screenshot
     img = env.render()
@@ -58,24 +62,17 @@ def record_step(env, observation, action, cost, step_count, images_dir, info_dir
 
         return img_path, csv_path
 
-
-def run_policy(env_name = 'pick-place-wall-v2', num_episodes = 1, max_steps = 500, output_dir = None ,image_size = 128, seed = None):
+def run_policy(env_name = 'pick-out-of-hole-v2', num_episodes = 1, max_steps = 500, output_dir = None ,image_size = 128, seed = None):
 
     if output_dir is None:
         output_dir = os.path.join('/Users/maxwellastafyev/Desktop/Metaworld_Research', 'metaworld_recordings')
 
     mt1 = metaworld.MT1(env_name = env_name, seed = seed)
-    env = mt1.train_classes[env_name](render_mode="rgb_array")
     task = mt1.train_tasks[0]
-    env.set_task(task)
-    env.camera_name = "corner3"
-
-    policy = SawyerPickPlaceWallV2Policy()
-
-
-    wall_params = {
-        'position': np.array([0.1, 0.75, 0.06]),
-        'half_size': np.array([0.12, 0.01, 0.06]),
+   
+    hole_params = {
+        'center': np.array([0.0, 0.6, 0.2]),
+        'threshold_radius': 0.03,
         'collision_threshold': 0.001
     }
 
@@ -84,22 +81,19 @@ def run_policy(env_name = 'pick-place-wall-v2', num_episodes = 1, max_steps = 50
     total_steps = 0
 
     for episode in range(num_episodes):
+        env = mt1.train_classes[env_name](render_mode="rgb_array")
+        env.set_task(task)
+        env.camera_name = "corner3"
+        #Policy set to pre-built policy from metaworld
+        policy = SawyerPickOutOfHoleV2Policy()
         observation, _ = env.reset()
         episode_cost = 0
         
         for step in range(max_steps):
-
             action = policy.get_action(observation)
-            # If using metaworld built in policy then will inject noise into action so we can produce unsafe states
-            if policy == SawyerPickPlaceWallV2Policy():
-                noise_std = 0.05
-                noise = np.random.normal(0, noise_std, size = action.shape)
-                action = np.clip(action + noise, -1.0, 1.0)
-            else :
-                action = action
-            cost = calculate_cost(observation, wall_params)
+            cost = calculate_cost(observation, hole_params)
 
-            img_path, csv_path = record_step(env, observation, action, cost, total_steps, images_dir, info_dir, image_size)
+            img_path, csv_path = record_step(env, observation, action, cost, total_steps, images_dir, info_dir)
 
             next_observation, reward, terminated, truncated, info = env.step(action)
 

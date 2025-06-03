@@ -1,87 +1,78 @@
-import os
 import gymnasium as gym
 import mani_skill.envs
 from mani_skill.utils.wrappers import FlattenRGBDObservationWrapper
-from PIL import Image
-import csv
-import numpy as np
 import torch
 import argparse
+from pathlib import Path
 
-def get_data(name, max_steps, obs_mode):
-    all_data =[]
-    #Initiate the environment
-    env = gym.make(name, obs_mode = obs_mode)
-    #adjust the obs value returned so that it contains the rendering and state in one variable
-    env = FlattenRGBDObservationWrapper(env)
-    obs, _  = env.reset()
-    obs_data = {
-        'state': obs['state'][0],
-        'rgb': obs['rgb'][0],
-        'depth' : obs['depth'][0],
-        'step': 0,
-        'action': None,
-        'cost': 0
-    }
-    all_data.append(obs_data)
- 
-    
-    for step in range(max_steps):
-        #Sample a random action. Change for actual policy
-        action = env.action_space.sample()
-        obs, _, terminated, truncated, _ = env.step(action)
-        cost = calculate_cost(env)
-        obs_data = {
-            'action': action,
-            'state': obs['state'][0],
-            'rgb': obs['rgb'][0],
-            'depth': obs['depth'][0],
-            'step': step,
-            'cost': cost
-        }
-        all_data.append(obs_data)
-        if terminated or truncated:
-            break
-    env.close()
-    return all_data
+def collect_episodes(name, num_episodes, max_steps, obs_mode, output_dir):
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    obses_dir = output_path / "obses"
+    obses_dir.mkdir(exist_ok=True)
 
-def save_data(all_data):
-    # Change for your specific directory
-    output_dir = os.path.join('/Users/maxwellastafyev/Desktop/Research_project/Maniskill_Research', 'maniskill_recordings')
-    # Set up output directories
-    os.makedirs(output_dir, exist_ok=True)
-    images_dir = os.path.join(output_dir,'images')
-    os.makedirs(images_dir, exist_ok=True)
-    info_dir = os.path.join(output_dir, 'info')
-    os.makedirs(info_dir, exist_ok=True)
+    all_actions = []
+    all_states = []
+    all_costs = []
+    seq_lengths = []
 
-    for step in range(len(all_data)):
-        # Collect data and set up paths
-        curr_data = all_data[step]
-        img_path = os.path.join(images_dir, f"step__{step}.png")
-        csv_path = os.path.join(info_dir, f"step__{step}.csv")
-        #Convert rgb_array to image
-        rgb_array = curr_data['rgb'].cpu().numpy()
-        rgb_array = rgb_array[:, :, :3]
-        if rgb_array.max() <= 1.0:
-            rgb_array = (rgb_array * 255).astype('uint8')
-        img = Image.fromarray(rgb_array)
-        img.save(img_path)
+    for episode_idx in range(num_episodes):
+        print(f"Episode {episode_idx + 1}/{num_episodes}")
 
-        with open(csv_path, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(['State'])
-            writer.writerow([str(curr_data['state'])])
+        env = gym.make(name, obs_mode = obs_mode)
+        env = FlattenRGBDObservationWrapper(env)
 
-            writer.writerow(['Action'])
-            writer.writerow([str(curr_data['action'])])
-
-            writer.writerow(['Cost'])
-            writer.writerow([str(curr_data['cost'])])
+        episode_actions = []
+        episode_states = []
+        episode_costs = []
+        episode_obs = []
 
 
-    
-    return output_dir
+        obs, _ = env.reset()
+
+        for step in range(max_steps):
+            episode_states.append(obs['state'][0])
+            episode_obs.append(obs['rgb'][0][:, :, :3])
+            
+
+            action = env.action_space.sample()
+            episode_actions.append(torch.tensor(action, dtype = torch.float32))
+
+            obs, _, terminated, truncated, _ = env.step(action)
+            cost =calculate_cost(env)
+            episode_costs.append(torch.tensor(cost,dtype = torch.float32))
+
+            if terminated or truncated:
+                break
+
+        env.close()
+
+        all_actions.append(torch.stack(episode_actions))
+        all_states.append(torch.stack(episode_states))
+        all_costs.append(torch.stack(episode_costs))
+        seq_lengths.append(len(episode_actions))
+
+        torch.save(torch.stack(episode_obs), obses_dir / f"episode_{episode_idx}.pth")
+
+    max_len = max(seq_lengths)
+
+
+    padded_actions = torch.zeros(num_episodes, max_len, all_actions[0].shape[-1])
+    padded_states = torch.zeros(num_episodes, max_len, all_states[0].shape[-1])
+    padded_costs = torch.zeros(num_episodes, max_len)
+
+    for i, (actions, states, costs) in enumerate(zip(all_actions, all_states, all_costs)):
+        length = len(actions)
+        padded_actions[i, :length] = actions
+        padded_states[i, :length] = states
+        padded_costs[i, :length] = costs
+
+    torch.save(padded_actions, output_path / "actions.pth")
+    torch.save(padded_states, output_path / "states.pth")
+    torch.save(torch.tensor(seq_lengths), output_path/ "seq_length.pth")
+    torch.save(padded_costs, output_path / "costs.pth")
+
+    print(f"Saved {num_episodes} episodes to {output_path}") 
 
 def calculate_cost(env, collision_threshold = 1e-6):
     #Get objects from environment
@@ -104,12 +95,13 @@ def calculate_cost(env, collision_threshold = 1e-6):
 def main():
     parser = argparse.ArgumentParser(description= ' Record Maniskill')
     parser.add_argument('--name', type= str, default= "UnitreeG1PlaceAppleInBowl-v1", help = 'Name of environment')
+    parser.add_argument('--num-episodes', type = int, default = 10)
     parser.add_argument('--max-steps', type = int, default = 100, help = 'Number of steps')
     parser.add_argument('--obs-mode',type = str, default = "rgb+depth", help = 'Observation mode')
-
+    parser.add_argument('--output-dir', type = str, default = '/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MS_data')
     args = parser.parse_args()
-    data = get_data(args.name, args.max_steps, args.obs_mode )
-    save_data(data)
+    
+    collect_episodes(args.name, args.num_episodes, args.max_steps, args.obs_mode, args.output_dir)
 
 if __name__ == "__main__":
     main()
