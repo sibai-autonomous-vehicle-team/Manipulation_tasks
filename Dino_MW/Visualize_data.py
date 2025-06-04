@@ -3,11 +3,11 @@ from pathlib import Path
 import re
 from torch.utils.data import Dataset
 # 1. Load the global episode-wise tensors (shape: [num_episodes, episode_len, dim])
-actions     = torch.load("/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MW_data/actions.pth")
-states      = torch.load("/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MW_data/states.pth")
-seq_lengths = torch.load("/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MW_data/seq_lengths.pth")  # e.g., tensor([100, 100, ...])
+actions     = torch.load("/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MS_data/actions.pth")
+states      = torch.load("/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MS_data/states.pth")
+seq_lengths = torch.load("/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MS_data/seq_length.pth")  # e.g., tensor([100, 100, ...])
 # 2. Gather & sort the observation files
-obs_dir = Path("/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MW_data/obses")
+obs_dir = Path("/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MS_data/obses")
 def episode_index(fn):
     return int(re.search(r"\d+", fn.name).group())
 obs_paths = sorted(obs_dir.glob("episode_*.pth*"), key=episode_index)

@@ -1,10 +1,10 @@
-import os 
 from pathlib import Path
 import argparse
 import numpy as np
 import metaworld
 from metaworld.policies import SawyerPickPlaceWallV2Policy
 import torch
+from PIL import Image
 
 def calculate_cost(observation, wall_params):
     #Determines cost based on position of end-effector compared to the arm
@@ -24,20 +24,21 @@ def calculate_cost(observation, wall_params):
     
     return 0.0
 
-def collect_episodes(env_name, num_episodes, max_steps, output_dir, image_size = 128, seed = None):
+def collect_episodes(env_name, num_episodes, max_steps, output_dir, image_size, seed = None):
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     obses_dir = output_path/ "obses"
     obses_dir.mkdir(exist_ok=True)
 
-
+    #Initialize environment and set camera angle
     mt1 = metaworld.MT1(env_name=env_name, seed=seed)
     env = mt1.train_classes[env_name](render_mode = "rgb_array")
     task = mt1.train_tasks[0]
     env.set_task(task)
-    env.camera_name = "corner3"
+    env.camera_name = "corner1"
+    
 
-
+    #Set policy
     policy = SawyerPickPlaceWallV2Policy()
 
     wall_params = {
@@ -60,11 +61,16 @@ def collect_episodes(env_name, num_episodes, max_steps, output_dir, image_size =
         episode_obs = []
 
         observation, _ = env.reset()
-
+        #Gather data
         for step in range(max_steps):
             episode_states.append(torch.tensor(observation, dtype = torch.float32))
 
             img = env.render()
+            if img.shape[0] != image_size or img.shape[1] != image_size:
+                img_pil = Image.fromarray(img)
+                img_pil = img_pil.resize((image_size, image_size), Image.LANCZOS)
+                img = np.array(img_pil)
+
             episode_obs.append(torch.tensor(img.copy(), dtype = torch.float32)/ 255.0)
 
             action = policy.get_action(observation)
@@ -93,9 +99,9 @@ def collect_episodes(env_name, num_episodes, max_steps, output_dir, image_size =
         torch.save(torch.stack(episode_obs), obses_dir /f"episode_{episode_idx}.pth")
 
     env.close()
-
+    #Pad sequences to the same length 
     max_len = max(seq_lengths)
-
+    
     padded_actions = torch.zeros(num_episodes, max_len, all_actions[0].shape[-1])
     padded_states = torch.zeros(num_episodes, max_len, all_states[0].shape[-1])
     padded_costs = torch.zeros(num_episodes, max_len)
@@ -105,18 +111,19 @@ def collect_episodes(env_name, num_episodes, max_steps, output_dir, image_size =
         padded_actions[i, :length] = actions
         padded_states[i, :length] = states  
         padded_costs[i, :length] = costs
-
+    #Save data
     torch.save(padded_actions, output_path / "actions.pth")
     torch.save(padded_states, output_path / "states.pth")
     torch.save(torch.tensor(seq_lengths), output_path / "seq_lengths.pth")
     torch.save(padded_costs, output_path / "costs.pth")
 
 def main():
+    #Added argparser so changing variables is much easier 
     parser = argparse.ArgumentParser(description = 'Record Metaworld')
     parser.add_argument('--episodes', type = int, default =10 , help = 'Number of episodes to run')
     parser.add_argument('--max-steps', type = int, default = 500, help = 'max # of steps')
     parser.add_argument('--output-dir', type = str, default = '/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MW_data', help = 'output directory')
-    parser.add_argument('--image-size', type = int, default = 128, help = 'size of images')
+    parser.add_argument('--image-size', type = int, default = 224, help = 'size of images')
     parser.add_argument('--seed', type = int, default = None, help = 'Random seed')
     parser.add_argument('--env-name', type = str, default = 'pick-place-wall-v2')
 

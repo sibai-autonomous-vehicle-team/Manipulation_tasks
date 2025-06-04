@@ -16,21 +16,18 @@ pip install numpy
 # ManiSkill (robotics simulator)
 pip install --upgrade mani_skill
 ```
-https://maniskill.readthedocs.io/en/latest/user_guide/getting_started/macos_install.html use instructions on this link for installation on mac
-
-Output structure
-maniskill_recordings/
-├── images/
-│   ├── step__0.png
-│   ├── step__1.png
-│   └── ...
-└── info/
-    ├── step__0.csv
-    ├── step__1.csv
-    └── ...
 
 
 test.py was used for determining the object names within the environment and if the objects exist
 
 Env_file.py is the environment file for the set environment that I tested with. Added a cost function and removed render function because rgb_array is returned within obs when running _env.step(action)
+
+
+Data_recorder.py is used for data collection. Everything is saved in a way that the Dino_MW processes it and images are rendered in 224x224 resolution.
+
+```bash
+#To get all argparser variables
+python Data_recorder.py --help
+```
+
 

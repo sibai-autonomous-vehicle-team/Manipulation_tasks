@@ -18,8 +18,8 @@ def collect_episodes(name, num_episodes, max_steps, obs_mode, output_dir):
 
     for episode_idx in range(num_episodes):
         print(f"Episode {episode_idx + 1}/{num_episodes}")
-
-        env = gym.make(name, obs_mode = obs_mode)
+        #Initalize environment 
+        env = gym.make(name, obs_mode = obs_mode, sensor_configs = dict(width = 224, height = 224))
         env = FlattenRGBDObservationWrapper(env)
 
         episode_actions = []
@@ -31,6 +31,7 @@ def collect_episodes(name, num_episodes, max_steps, obs_mode, output_dir):
         obs, _ = env.reset()
 
         for step in range(max_steps):
+            #Collect data
             episode_states.append(obs['state'][0])
             episode_obs.append(obs['rgb'][0][:, :, :3])
             
@@ -53,10 +54,10 @@ def collect_episodes(name, num_episodes, max_steps, obs_mode, output_dir):
         seq_lengths.append(len(episode_actions))
 
         torch.save(torch.stack(episode_obs), obses_dir / f"episode_{episode_idx}.pth")
-
+    #Pad data so that it's all the same size
     max_len = max(seq_lengths)
 
-
+    
     padded_actions = torch.zeros(num_episodes, max_len, all_actions[0].shape[-1])
     padded_states = torch.zeros(num_episodes, max_len, all_states[0].shape[-1])
     padded_costs = torch.zeros(num_episodes, max_len)
@@ -66,10 +67,10 @@ def collect_episodes(name, num_episodes, max_steps, obs_mode, output_dir):
         padded_actions[i, :length] = actions
         padded_states[i, :length] = states
         padded_costs[i, :length] = costs
-
+    #Save data
     torch.save(padded_actions, output_path / "actions.pth")
     torch.save(padded_states, output_path / "states.pth")
-    torch.save(torch.tensor(seq_lengths), output_path/ "seq_length.pth")
+    torch.save(torch.tensor(seq_lengths), output_path/ "seq_lengths.pth")
     torch.save(padded_costs, output_path / "costs.pth")
 
     print(f"Saved {num_episodes} episodes to {output_path}") 
@@ -93,6 +94,7 @@ def calculate_cost(env, collision_threshold = 1e-6):
     return 0.0
 
 def main():
+    #Added argparser so that all variables can be changed easily 
     parser = argparse.ArgumentParser(description= ' Record Maniskill')
     parser.add_argument('--name', type= str, default= "UnitreeG1PlaceAppleInBowl-v1", help = 'Name of environment')
     parser.add_argument('--num-episodes', type = int, default = 10)
