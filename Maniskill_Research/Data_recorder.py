@@ -34,7 +34,6 @@ def collect_episodes(name, num_episodes, max_steps, obs_mode, output_dir):
             #Collect data
             episode_states.append(obs['state'][0])
             episode_obs.append(obs['rgb'][0][:, :, :3])
-            print(env.get_state_dict())
 
             action = env.action_space.sample()
             episode_actions.append(torch.tensor(action, dtype = torch.float32))
