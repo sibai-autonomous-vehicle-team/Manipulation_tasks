@@ -39,13 +39,28 @@ class ManiSkillDataset(TrajDataset):
         self.states = self.states[:n]
         self.actions = self.actions[:n]
         self.seq_lengths = self.seq_lengths[:n]
-        self.shapes = ['T'] * len(self.states)
         
         self.proprios = self.states[..., 26:58].clone()
 
         self.action_dim = self.actions.shape[-1]
         self.state_dim = self.states.shape[-1]
         self.proprio_dim = self.proprios.shape[-1]
+        
+        if normalize_action:
+            self.action_mean, self.action_std = self.get_data_mean_std(self.actions, self.seq_lengths)
+            self.state_mean, self.state_std = self.get_data_mean_std(self.states, self.seq_lengths)
+            self.proprio_mean, self.proprio_std = self.get_data_mean_std(self.proprios, self.seq_lengths)
+        else:
+            self.action_mean = torch.zeros(self.action_dim)
+            self.action_std = torch.ones(self.action_dim)
+            self.state_mean = torch.zeros(self.state_dim)
+            self.state_std = torch.ones(self.state_dim)
+            self.proprio_mean = torch.zeros(self.proprio_dim)
+            self.proprio_std = torch.ones(self.proprio_dim)
+
+        self.actions = (self.actions - self.action_mean) / self.action_std
+        self.proprios = (self.proprios - self.proprio_mean) / self.proprio_std
+
 
 
     def get_seq_length(self, idx):
@@ -60,21 +75,15 @@ class ManiSkillDataset(TrajDataset):
 
     def get_frames(self, idx, frames):
         obs_file = self.data_path / "obses" / f"episode_{idx}.pth"
-        
-        
-        images = torch.load(obs_file)
-
+        images = torch.load(obs_file, map_location="cpu")
         images = images.float() / 255.0
-
-        if images.shape[-1] == 3:
-            images = rearrange(images, "T H W C -> T C H W")
+        images = rearrange(images, "T H W C -> T C H W")
         if self.transform:
             images = self.transform(images)
 
         image = images[frames]
         actions = self.actions[idx, frames]
         full_states = self.states[idx, frames]
-        shape = self.shapes[idx, frames]
         proprio_states = self.proprios[idx, frames]
             
         obs = {
@@ -82,7 +91,7 @@ class ManiSkillDataset(TrajDataset):
             "proprio" : proprio_states
         }
 
-        return obs, actions, full_states, {'shape': shape} 
+        return obs, actions, full_states, {}
         
 
     def __getitem__(self, idx):
@@ -97,6 +106,17 @@ class ManiSkillDataset(TrajDataset):
         elif isinstance(imgs, torch.Tensor):
             return rearrange(imgs, "b h w c -> b c h w") / 255.0
         
+    def get_data_mean_std(self, data, traj_lengths):
+        all_data = []
+        for traj in range(len(traj_lengths)):
+            traj_len = traj_lengths[traj]
+            traj_data = data[traj, :traj_len]
+            all_data.append(traj_data)
+        all_data = torch.vstack(all_data)
+        data_mean = torch.mean(all_data, dim=0)
+        data_std = torch.std(all_data, dim=0)
+        return data_mean, data_std
+        
 def load_maniskill_slice_train_val(
         transform,
         data_path,
@@ -109,7 +129,7 @@ def load_maniskill_slice_train_val(
         frameskip = 0,
         with_costs = True,
 ):
-    full_dataset = ManiSkillDataset(
+    dset = ManiSkillDataset(
         data_path=data_path,
         transform=transform,
         normalize_action=normalize_action,
@@ -119,23 +139,21 @@ def load_maniskill_slice_train_val(
     )
 
     train_dset, val_dset = split_traj_datasets(
-        full_dataset,
+        dset,
         train_fraction=split_ratio
     )
-
-    num_frames = num_hist + num_pred
-
-
-    train_slices = TrajSlicerDataset(train_dset, num_frames, frameskip)
-    val_slices = TrajSlicerDataset(val_dset, num_frames, frameskip)
-
+    
+    dset_train, dset_val, train_slices, val_slices = get_train_val_sliced(
+        traj_dataset=dset, 
+        train_fraction=split_ratio, 
+        num_frames=num_hist + num_pred, 
+        frameskip=frameskip
+    )
 
     datasets = {}
-    datasets["train"] = train_slices
-    datasets["valid"] = val_slices
-
+    datasets['train'] = train_slices
+    datasets['valid'] = val_slices
     traj_dset = {}
-    traj_dset["train"] = train_dset
-    traj_dset["valid"] = val_dset
-
+    traj_dset['train'] = dset_train
+    traj_dset['valid'] = dset_val
     return datasets, traj_dset

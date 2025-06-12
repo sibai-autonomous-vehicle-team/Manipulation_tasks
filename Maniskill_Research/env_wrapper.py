@@ -4,7 +4,7 @@ from mani_skill.utils.wrappers import FlattenRGBDObservationWrapper
 import torch
 from pathlib import Path
 import numpy as np
-##State vector: bowl [0:12], apple [13:25], robot, [26:57]
+##State vector: bowl [0:12], apple [13:25], robot, [26:88]
 
 def aggregate_dct(dcts):
         full_dct = {}
@@ -57,40 +57,30 @@ class ManiskillWrapper():
 
     def sample_random_init_goal_states(self, seed):
         rs = np.random.RandomState(seed)
-        obs, _ = self._env.reset(seed)
-        base_state = obs['state'][0].cpu().numpy()
-        state = base_state.copy()
-
+        obs, _ = self._env.reset()
+        full_state = self._env.unwrapped.get_state().cpu().numpy()  
+    
+        init_state = full_state.copy()
+        goal_state = full_state.copy()
+    
+        if len(init_state.shape) > 1:
+            init_flat = init_state[0]
+            goal_flat = goal_state[0] 
+        else:
+            init_flat = init_state
+            goal_flat = goal_state
+    
         bowl_xy = rs.uniform(-0.025, 0.025, 2) + np.array([0.0, -0.4])
         bowl_z = 0.753
-        bowl_quat = np.array([1.0, 0.0, 0.0, 0.0])
-        state[0:3] = [*bowl_xy, bowl_z]
-        state[3:7] = bowl_quat
-
+    
+        init_flat[0:3] = [bowl_xy[0], bowl_xy[1], bowl_z]
+        goal_flat[0:3] = [bowl_xy[0], bowl_xy[1], bowl_z]
+    
         apple_xy = rs.uniform(-0.1, 0.1, 2)
-        while np.linalg.norm(apple_xy - bowl_xy) < 0.1:
-            apple_xy = rs.uniform(-0.1, 0.1, 2)
-
-        apple_z = 0.7335
-        apple_quat = self._random_quaternion_z_only(rs)
-
-        init_state = state.copy()
-        init_state[13:16] = [*apple_xy, apple_z]
-        init_state[16:20] = apple_quat
-
-        goal_state = state.copy()
-        goal_pos = [bowl_xy[0], bowl_xy[1], bowl_z + 0.02]
-        goal_state[13:16] = goal_pos
-        goal_state[16:20] = self._random_quaternion_z_only(rs)
-
-
-        robot_indices = list(range(26, 58))
-
-        for idx in robot_indices:
-            noise =rs.normal(0, 0.02)
-            init_state[idx] += noise
-            goal_state[idx] += noise
-        
+        init_flat[13:16] = [apple_xy[0], apple_xy[1], 0.7335]
+        goal_flat[13:16] = [bowl_xy[0], bowl_xy[1], bowl_z + 0.02]
+    
+    
         return init_state, goal_state
     
 
@@ -107,13 +97,18 @@ class ManiskillWrapper():
     
 
     def eval_state(self, goal_state, cur_state):
+        if isinstance(cur_state, torch.Tensor):
+            cur_state = cur_state.cpu().numpy()
+        if isinstance(goal_state, torch.Tensor):
+            goal_state = goal_state.cpu().numpy()
+
 
         apple_cur = cur_state[13:16]
-        robot_cur = cur_state[26:58]
+        robot_cur = cur_state[26:89]
         cur = np.concatenate([apple_cur, robot_cur])
     
         apple_goal = goal_state[13:16]
-        robot_goal = goal_state[26:58]
+        robot_goal = goal_state[26:89]
         goal = np.concatenate([apple_goal, robot_goal])
     
         pos_diff = np.linalg.norm(cur - goal)
@@ -129,20 +124,22 @@ class ManiskillWrapper():
     
     def prepare(self, seed, init_state):
         self._env.reset(seed = seed)
-        self._env.set_state(init_state)
+        if len(init_state.shape) ==1:
+            state_with_batch = init_state.reshape(1, -1)
+        else:
+            state_with_batch = init_state
 
-        obs = self._env.get_obs()
-
-
-
-        state = obs['state'][0]
+        self._env.unwrapped.set_state(state_with_batch)
+        dummy_action = np.zeros(self.action_dim)
+        obs, _, _, _, _ = self._env.step(dummy_action)
+        
+        state  = self._env.get_state()
         obs = {
-            'visual': obs['rgb'][0],
-            'proprio': obs['state'][0][20:58]
+            'visual': obs['rgb'][0][:, :, 3:6],
+            'proprio': obs['state'][0][26:58]
         }
 
         return obs, state
-    ##Return obs(visual, proprio), and additionally return full state
 
     def step_multiple(self, actions):
         obses = []
@@ -152,9 +149,9 @@ class ManiskillWrapper():
 
         for action in actions:
             obs, reward, truncated, terminated, info = self._env.step(action)
-            visual = obs['rgb'][0]
-            state = obs['state'][0]
-            proprio = obs['state'][0][20:58]
+            visual = obs['rgb'][0][:, :, 3:6]
+            state = self._env.get_state()
+            proprio = obs['state'][0][26:58]
             obs = {'visual' : visual, 'proprio': proprio}
             obses.append(obs)
             rewards.append(reward)
@@ -171,7 +168,6 @@ class ManiskillWrapper():
         infos = aggregate_dct(infos)
 
         return obses, rewards, dones, infos 
-    ##Should return proprio and visual
 
     def rollout(self, seed, init_state, actions):
         obs, state = self.prepare(seed, init_state)  

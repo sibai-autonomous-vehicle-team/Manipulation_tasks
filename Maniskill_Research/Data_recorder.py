@@ -32,8 +32,11 @@ def collect_episodes(name, num_episodes, max_steps, obs_mode, output_dir):
 
         for step in range(max_steps):
             #Collect data
-            episode_states.append(obs['state'][0])
-            episode_obs.append(obs['rgb'][0][:, :, :3])
+            state = env.get_state()
+            if len(state.shape) > 1:
+                state = state.squeeze(0)
+            episode_states.append(state)
+            episode_obs.append(obs['rgb'][0][:,:,  3:6])
 
             action = env.action_space.sample()
             episode_actions.append(torch.tensor(action, dtype = torch.float32))
@@ -52,7 +55,8 @@ def collect_episodes(name, num_episodes, max_steps, obs_mode, output_dir):
         all_costs.append(torch.stack(episode_costs))
         seq_lengths.append(len(episode_actions))
 
-        torch.save(torch.stack(episode_obs), obses_dir / f"episode_{episode_idx}.pth")
+        torch.save(torch.stack(episode_obs).cpu(), obses_dir / f"episode_{episode_idx}.pth")
+
     #Pad data so that it's all the same size
     max_len = max(seq_lengths)
 
@@ -97,9 +101,9 @@ def main():
     parser = argparse.ArgumentParser(description= ' Record Maniskill')
     parser.add_argument('--name', type= str, default= "UnitreeG1PlaceAppleInBowl-v1", help = 'Name of environment')
     parser.add_argument('--num-episodes', type = int, default = 10)
-    parser.add_argument('--max-steps', type = int, default = 100, help = 'Number of steps')
+    parser.add_argument('--max-steps', type = int, default = 300, help = 'Number of steps')
     parser.add_argument('--obs-mode',type = str, default = "rgb+depth", help = 'Observation mode')
-    parser.add_argument('--output-dir', type = str, default = '/Users/maxwellastafyev/Desktop/Research_project/Manipulation_tasks/Dino_MW/MS_data')
+    parser.add_argument('--output-dir', type = str, default = '/storage1/sibai/Active/ihab/research_new/datasets_dino/maniskill')
     args = parser.parse_args()
     
     collect_episodes(args.name, args.num_episodes, args.max_steps, args.obs_mode, args.output_dir)
