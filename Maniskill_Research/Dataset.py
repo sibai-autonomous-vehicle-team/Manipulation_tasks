@@ -40,7 +40,7 @@ class ManiSkillDataset(TrajDataset):
         self.actions = self.actions[:n]
         self.seq_lengths = self.seq_lengths[:n]
         
-        self.proprios = self.states[..., 26:58].clone()
+        self.proprios = self.states[..., 39:89].clone()
 
         self.action_dim = self.actions.shape[-1]
         self.state_dim = self.states.shape[-1]
@@ -157,3 +157,4 @@ def load_maniskill_slice_train_val(
     traj_dset['train'] = dset_train
     traj_dset['valid'] = dset_val
     return datasets, traj_dset
+
