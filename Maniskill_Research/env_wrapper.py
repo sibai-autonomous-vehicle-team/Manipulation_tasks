@@ -4,8 +4,8 @@ from mani_skill.utils.wrappers import FlattenRGBDObservationWrapper
 import torch
 from pathlib import Path
 import numpy as np
-##State vector: bowl [0:12], apple [13:25], robot, [26:88]
-
+##State vector: bowl [0:12], apple [13:25], robot, [39:89]
+##obs vector [0:50] - proprio
 def aggregate_dct(dcts):
         full_dct = {}
         for dct in dcts:
@@ -24,11 +24,10 @@ class ManiskillWrapper():
     def __init__(
             self,
             env_name = "UnitreeG1PlaceAppleInBowl-v1",
-            obs_mode = "rgb+depth",
+            obs_mode = "state",
             size = (224,224)
     ):
         self._env = gym.make(env_name, obs_mode = obs_mode, sensor_configs = dict(width = size[0], height = size[1]))
-        self._env = FlattenRGBDObservationWrapper(self._env)
         self.action_dim = self._env.action_space.shape[0]
 
     @property
@@ -48,9 +47,9 @@ class ManiskillWrapper():
         if contact_forces is not None and len(contact_forces) > 0:
             forces_magnitudes = torch.norm(contact_forces, dim = -1)
             total_force = torch.sum(forces_magnitudes).item()
-
+            #Returns 1.0 if collision detected
             if total_force > collision_threshold:
-                return 0.8
+                return 1.0
             
         return 0.0
     
@@ -85,9 +84,7 @@ class ManiskillWrapper():
     
 
     def _random_quaternion_z_only(self, rs):
-
         angle = rs.uniform(0, 2*np.pi)
-
         w = np.cos(angle/2)
         x = 0.0
         y = 0.0
@@ -104,11 +101,11 @@ class ManiskillWrapper():
 
 
         apple_cur = cur_state[13:16]
-        robot_cur = cur_state[26:89]
+        robot_cur = cur_state[39:89]
         cur = np.concatenate([apple_cur, robot_cur])
     
         apple_goal = goal_state[13:16]
-        robot_goal = goal_state[26:89]
+        robot_goal = goal_state[39:89]
         goal = np.concatenate([apple_goal, robot_goal])
     
         pos_diff = np.linalg.norm(cur - goal)
@@ -130,13 +127,11 @@ class ManiskillWrapper():
             state_with_batch = init_state
 
         self._env.unwrapped.set_state(state_with_batch)
-        dummy_action = np.zeros(self.action_dim)
-        obs, _, _, _, _ = self._env.step(dummy_action)
-        
+        image = self._env.unwrapped.render_sensors().squeeze(0)[:, -224:, :]
         state  = self._env.get_state()
         obs = {
-            'visual': obs['rgb'][0][:, :, 3:6],
-            'proprio': obs['state'][0][26:58]
+            'proprio': state[0][39:89],
+            'visual': image
         }
 
         return obs, state
@@ -149,9 +144,9 @@ class ManiskillWrapper():
 
         for action in actions:
             obs, reward, truncated, terminated, info = self._env.step(action)
-            visual = obs['rgb'][0][:, :, 3:6]
+            visual = self._env.unwrapped.render_sensors().squeeze(0)[:, -224:, :]
             state = self._env.get_state()
-            proprio = obs['state'][0][26:58]
+            proprio = obs[0][0:50]
             obs = {'visual' : visual, 'proprio': proprio}
             obses.append(obs)
             rewards.append(reward)
@@ -188,4 +183,3 @@ class ManiskillWrapper():
 
         return result_obses, states
     
-    ##Rollout and step multiple should return observation, containing visual and proprio
