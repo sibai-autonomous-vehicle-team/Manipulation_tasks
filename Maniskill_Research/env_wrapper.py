@@ -68,18 +68,29 @@ class ManiskillWrapper():
         else:
             init_flat = init_state
             goal_flat = goal_state
-    
-        bowl_xy = rs.uniform(-0.025, 0.025, 2) + np.array([0.0, -0.4])
-        bowl_z = 0.753
-    
-        init_flat[0:3] = [bowl_xy[0], bowl_xy[1], bowl_z]
-        goal_flat[0:3] = [bowl_xy[0], bowl_xy[1], bowl_z]
-    
+        init_flat[0:13] = [-0.0133, -0.4014,  0.7530,  1.0000,  0.0000,  0.0000,  0.0000,  0.0000,
+         0.0000,  0.0000,  0.0000,  0.0000,  0.0000]
+        goal_flat[0:13] = [-0.0133, -0.4014,  0.7530,  1.0000,  0.0000,  0.0000,  0.0000,  0.0000,
+         0.0000,  0.0000,  0.0000,  0.0000,  0.0000]
         apple_xy = rs.uniform(-0.1, 0.1, 2)
         init_flat[13:16] = [apple_xy[0], apple_xy[1], 0.7335]
-        goal_flat[13:16] = [bowl_xy[0], bowl_xy[1], bowl_z + 0.02]
-    
-    
+        init_flat[16:20] = self._random_quaternion_z_only(rs)
+
+        goal_flat[13:26] = [-0.0201, -0.3595,  0.7765, -0.1460,  0.9200,  0.3578,  0.0654,  0.3022,
+        -0.0878, -0.0166,  1.1685,  6.9355,  3.8787]
+
+        goal_flat[39:89] = [-2.6336e-01, -9.2672e-01, -6.7181e-01,  1.6503e+00, -1.6400e-01,
+        -1.1230e+00, -8.2368e-02, -2.2680e-01,  3.9840e-01,  1.6550e+00,
+        -1.6204e+00, -5.2360e-01,  2.9999e-01,  2.9999e-01,  1.1011e-01,
+         1.7506e+00, -2.9997e-01, -1.0000e+00, -3.9863e-06, -6.9409e-07,
+        -6.2479e-01,  1.8400e+00, -3.2462e-07,  6.5954e-06,  9.9346e-06,
+         3.1006e-01,  7.4477e-01,  2.7878e-01,  1.2338e+00,  1.1845e-01,
+        -1.2295e+00,  9.6740e-01, -1.2078e-05,  1.2272e+00,  1.1936e+00,
+        -1.2038e+00, -2.0584e-06, -7.7568e-05, -4.3718e-05,  1.6187e+00,
+         8.7291e-01,  6.0899e-07,  1.6297e-04, -3.9867e-06,  2.6943e-07,
+        -5.7832e-01, -4.9636e-05,  6.1666e-06,  1.5266e-05, -6.3714e-05]
+
+
         return init_state, goal_state
     
 
@@ -121,7 +132,7 @@ class ManiskillWrapper():
     
     def prepare(self, seed, init_state):
         self._env.reset(seed = seed)
-        if len(init_state.shape) ==1:
+        if len(init_state.shape) == 1:
             state_with_batch = init_state.reshape(1, -1)
         else:
             state_with_batch = init_state
